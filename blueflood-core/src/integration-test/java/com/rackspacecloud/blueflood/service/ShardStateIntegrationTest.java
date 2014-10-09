@@ -23,6 +23,7 @@ import com.rackspacecloud.blueflood.rollup.Granularity;
 import com.rackspacecloud.blueflood.utils.Util;
 import com.google.common.collect.Iterables;
 import com.google.common.collect.Lists;
+import org.junit.After;
 import org.junit.Assert;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -339,11 +340,12 @@ public class ShardStateIntegrationTest extends IntegrationTestBase {
         Assert.assertNull(errBucket[1]);
     }
 
+
     @Test
-    public void testShardOperationsConcurrencyMultipleIngestors() throws InterruptedException {
-        final long tryFor = 15000;
+    public void testConvergenceForMultipleIngestors() throws InterruptedException {
+        final long tryFor = 1000;
         final AtomicLong time = new AtomicLong(1234L);
-        final Collection<Integer> shards = Collections.unmodifiableCollection(Util.parseShards("4,5,6,7,8,9,10,11,12,13,14,15,16"));
+        final Collection<Integer> shards = Collections.unmodifiableCollection(Util.parseShards("ALL"));
         final List<ScheduleContext> ctxs = Lists.newArrayList(new ScheduleContext(time.get(), shards), new ScheduleContext(time.get(), shards));
         final List<ShardStateWorker> workers = Lists.newArrayList(new ShardStatePusher(shards, ctxs.get(0).getShardStateManager(), ShardStateIntegrationTest.this.io),
                 new ShardStatePuller(shards, ctxs.get(0).getShardStateManager(), ShardStateIntegrationTest.this.io),
@@ -372,8 +374,17 @@ public class ShardStateIntegrationTest extends IntegrationTestBase {
         }};
 
         updateIterator.start();
-        latch.await(tryFor + 2000, TimeUnit.MILLISECONDS);
-        makeWorkersSyncState(workers);
+        latch.await();
+
+        workers.get(0).performOperation();
+        workers.get(3).performOperation();
+        workers.get(2).performOperation();
+        workers.get(1).performOperation();
+        workers.get(0).performOperation();
+        workers.get(3).performOperation();
+        workers.get(2).performOperation();
+        workers.get(1).performOperation();
+
         Assert.assertFalse(err.get());
 
         for (Granularity gran : Granularity.rollupGranularities()) {
@@ -511,10 +522,16 @@ public class ShardStateIntegrationTest extends IntegrationTestBase {
         }
     }
 
+    @After
+    public void cleanupShardStateIO () {
+        if (this.io instanceof InMemoryShardStateIO) {
+            ((InMemoryShardStateIO) this.io).cleanUp();
+        }
+    }
+
     private void makeWorkersSyncState(List<ShardStateWorker> workers) {
         // All states should be synced after 2 attempts, irrespective of operation ordering which is proved by shuffling of orders
         for (int i=0; i<=2; i++) {
-            Collections.shuffle(workers, new Random(System.nanoTime()));
             for (ShardStateWorker worker : workers) {
                 worker.performOperation();
             }
@@ -554,6 +571,10 @@ public class ShardStateIntegrationTest extends IntegrationTestBase {
         @Override
         public void putShardState(int shard, Map<Granularity, Map<Integer, UpdateStamp>> slotTimes) throws IOException {
             map.put(shard, slotTimes);
+        }
+
+        public void cleanUp() {
+            map.clear();
         }
     }
 }
