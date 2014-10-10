@@ -122,7 +122,12 @@ public class ScheduleContext implements IngestionContext {
                 // sync on map since we do not want anything added to or taken from it while we iterate.
                 synchronized (scheduledSlots) { // read
                     synchronized (runningSlots) { // read
-                        List<Integer> slotsToWorkOn = shardStateManager.getSlotStateManager(shard, g).getSlotsOlderThan(now, maxAgeMillis);
+                        List<Integer> slotsToWorkOn;
+                        if (Configuration.getInstance().getBooleanProperty(CoreConfig.APPLY_ROLLUP_PATCH)) {
+                            slotsToWorkOn = shardStateManager.getSlotStateManager(shard, g).getSlotsWithinCatchUpPeriod(now, maxAgeMillis);
+                        } else {
+                            slotsToWorkOn = shardStateManager.getSlotStateManager(shard, g).getSlotsOlderThan(now, maxAgeMillis);
+                        }
                         if (slotsToWorkOn.size() == 0) {
                             continue;
                         }
@@ -226,7 +231,7 @@ public class ScheduleContext implements IngestionContext {
             // If the current state is active, it means we received a delayed put which toggled the status to Active.
             if (stamp.getState() == UpdateStamp.State.Running) {
                 stamp.setState(UpdateStamp.State.Rolled);
-                stamp.setTimestamp(getCurrentTimeMillis());
+                // Note: Rollup state will be updated to the last ACTIVE timestamp which caused rollup process to kick in.
                 stamp.setDirty(true);
             }
         }
