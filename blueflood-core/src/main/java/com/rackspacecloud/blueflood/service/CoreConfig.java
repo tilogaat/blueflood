@@ -136,7 +136,10 @@ public enum CoreConfig implements ConfigDefaults {
 
     DROP_SLOTS_BEYOND_TS("1412971200000"), //10/10/2014 01:00:00 PM PDT
 
-    APPLY_ROLLUP_PATCH("false");
+    APPLY_ROLLUP_PATCH("false"),
+    
+    // how long we typically wait to schedule a rollup.
+    ROLLUP_DELAY_MILLIS("300000");
 
     static {
         Configuration.getInstance().loadDefaults(CoreConfig.values());
