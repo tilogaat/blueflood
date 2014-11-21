@@ -42,7 +42,6 @@ import java.util.concurrent.TimeUnit;
  * when logic in Writer changes, these tests can break unless the logic is changed here too. */
 public class MetricsIntegrationTest extends IntegrationTestBase {
 
-    private static boolean areStringMetricsDropped = Configuration.getInstance().getBooleanProperty(CoreConfig.STRING_METRICS_DROPPED);
     // returns a collection all checks that were written at some point.
     // this was a lot cooler back when the slot changed with time.
     private Collection<Locator> writeLocatorsOnly(int hours) throws Exception {
