@@ -39,6 +39,7 @@ import com.rackspacecloud.blueflood.utils.TimeValue;
 import com.rackspacecloud.blueflood.utils.Util;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import redis.clients.jedis.Jedis;
 
 import java.util.*;
 import java.util.concurrent.TimeUnit;
@@ -55,6 +56,7 @@ public class AstyanaxWriter extends AstyanaxIO {
     private boolean areStringMetricsDropped = Configuration.getInstance().getBooleanProperty(CoreConfig.STRING_METRICS_DROPPED);
     private List<String> tenantIdsKept = Configuration.getInstance().getListProperty(CoreConfig.TENANTIDS_TO_KEEP);
     private Set<String> keptTenantIdsSet = new HashSet<String>(tenantIdsKept);
+    private static Jedis jedis = new Jedis("localhost");
 
     public static AstyanaxWriter getInstance() {
         return instance;
@@ -62,7 +64,6 @@ public class AstyanaxWriter extends AstyanaxIO {
 
     // todo: should be some other impl.
     private static TenantTtlProvider TTL_PROVIDER = SafetyTtlProvider.getInstance();
-    
 
     // this collection is used to reduce the number of locators that get written.  Simply, if a locator has been
     // seen within the last 10 minutes, don't bother.
@@ -70,6 +71,8 @@ public class AstyanaxWriter extends AstyanaxIO {
             TimeUnit.MINUTES).concurrencyLevel(16).build();
 
     private boolean shouldPersistStringMetric(Metric metric) {
+        //jedis.set(metric.getLocator().toString(),metric.getMetricValue().toString());
+
         String tenantId = metric.getLocator().getTenantId();
 
         if(areStringMetricsDropped && !keptTenantIdsSet.contains(tenantId) ) {
@@ -77,9 +80,13 @@ public class AstyanaxWriter extends AstyanaxIO {
         }
         else {
             String currentValue = String.valueOf(metric.getMetricValue());
-            final String lastValue = AstyanaxReader.getInstance().getLastStringValue(metric.getLocator());
-
-            return lastValue == null || !currentValue.equals(lastValue);
+            String locator = String.valueOf(metric.getLocator());
+            final String lastValue = jedis.get(String.valueOf(metric.getLocator()));
+            boolean shouldPersist = lastValue == null || !currentValue.equals(lastValue);
+            if (shouldPersist) {
+                jedis.set(locator,currentValue);
+            }
+            return shouldPersist;
         }
     }
 
