@@ -28,6 +28,8 @@ import com.netflix.astyanax.MutationBatch;
 import com.netflix.astyanax.connectionpool.exceptions.ConnectionException;
 import com.netflix.astyanax.model.ColumnFamily;
 import com.netflix.astyanax.serializers.AbstractSerializer;
+import com.rackspacecloud.blueflood.cache.AnnotationsReadCache;
+import com.rackspacecloud.blueflood.cache.RedisAnnotationsReadCache;
 import com.rackspacecloud.blueflood.cache.SafetyTtlProvider;
 import com.rackspacecloud.blueflood.cache.TenantTtlProvider;
 import com.rackspacecloud.blueflood.io.serializers.NumericSerializer;
@@ -39,7 +41,6 @@ import com.rackspacecloud.blueflood.utils.TimeValue;
 import com.rackspacecloud.blueflood.utils.Util;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import redis.clients.jedis.Jedis;
 
 import java.util.*;
 import java.util.concurrent.TimeUnit;
@@ -56,7 +57,7 @@ public class AstyanaxWriter extends AstyanaxIO {
     private boolean areStringMetricsDropped = Configuration.getInstance().getBooleanProperty(CoreConfig.STRING_METRICS_DROPPED);
     private List<String> tenantIdsKept = Configuration.getInstance().getListProperty(CoreConfig.TENANTIDS_TO_KEEP);
     private Set<String> keptTenantIdsSet = new HashSet<String>(tenantIdsKept);
-    private static Jedis jedis = new Jedis("localhost");
+    private static AnnotationsReadCache annotationsReadCache = new RedisAnnotationsReadCache();
 
     public static AstyanaxWriter getInstance() {
         return instance;
@@ -71,8 +72,6 @@ public class AstyanaxWriter extends AstyanaxIO {
             TimeUnit.MINUTES).concurrencyLevel(16).build();
 
     private boolean shouldPersistStringMetric(Metric metric) {
-        //jedis.set(metric.getLocator().toString(),metric.getMetricValue().toString());
-
         String tenantId = metric.getLocator().getTenantId();
 
         if(areStringMetricsDropped && !keptTenantIdsSet.contains(tenantId) ) {
@@ -81,10 +80,10 @@ public class AstyanaxWriter extends AstyanaxIO {
         else {
             String currentValue = String.valueOf(metric.getMetricValue());
             String locator = String.valueOf(metric.getLocator());
-            final String lastValue = jedis.get(String.valueOf(metric.getLocator()));
+            final String lastValue = annotationsReadCache.getValueOfAnnotation(String.valueOf(metric.getLocator()));
             boolean shouldPersist = lastValue == null || !currentValue.equals(lastValue);
             if (shouldPersist) {
-                jedis.set(locator,currentValue);
+                annotationsReadCache.setValueOfAnnotation(locator,currentValue);
             }
             return shouldPersist;
         }
