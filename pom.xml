@@ -180,10 +180,10 @@
 
       <plugin>
         <groupId>ru.trylogic.maven.plugins</groupId>
-        <artifactId>redis-maven-plugin</artifactId>
+        <artifactId>build-helper-redis-maven-plugin</artifactId>
             <version>1.2.3</version>
             <configuration>
-                <forked>false</forked>
+                <forked>true</forked>
             </configuration>
             <executions>
                 <execution>
