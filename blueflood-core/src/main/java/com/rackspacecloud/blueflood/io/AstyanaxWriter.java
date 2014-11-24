@@ -57,7 +57,7 @@ public class AstyanaxWriter extends AstyanaxIO {
     private boolean areStringMetricsDropped = Configuration.getInstance().getBooleanProperty(CoreConfig.STRING_METRICS_DROPPED);
     private List<String> tenantIdsKept = Configuration.getInstance().getListProperty(CoreConfig.TENANTIDS_TO_KEEP);
     private Set<String> keptTenantIdsSet = new HashSet<String>(tenantIdsKept);
-    private static AnnotationsReadCache annotationsReadCache = new RedisAnnotationsReadCache();
+    private AnnotationsReadCache annotationsReadCache = new RedisAnnotationsReadCache();
 
     public static AstyanaxWriter getInstance() {
         return instance;
