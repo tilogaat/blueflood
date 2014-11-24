@@ -273,7 +273,6 @@ public class MetricsIntegrationTest extends IntegrationTestBase {
     //In this test, string metrics are configured to be always dropped. So they are not persisted at all.
     public void testStringMetricsIfSoConfiguredAreAlwaysDropped() throws Exception {
         Whitebox.setInternalState(AstyanaxWriter.getInstance(), "areStringMetricsDropped", true);
-        Whitebox.setInternalState(AstyanaxWriter.getInstance(), "annotationsReadCache", inmemorycache);
 
         AstyanaxWriter writer = AstyanaxWriter.getInstance();
         AstyanaxReader reader = AstyanaxReader.getInstance();
@@ -308,7 +307,6 @@ public class MetricsIntegrationTest extends IntegrationTestBase {
     //In this test, string metrics are configured to be always dropped. So they are not persisted at all.
     public void testStringMetricsIfSoConfiguredAreNotDroppedForKeptTenantIds() throws Exception {
         Whitebox.setInternalState(AstyanaxWriter.getInstance(), "areStringMetricsDropped", true);
-        Whitebox.setInternalState(AstyanaxWriter.getInstance(), "annotationsReadCache", inmemorycache);
 
         AstyanaxWriter writer = AstyanaxWriter.getInstance();
         AstyanaxReader reader = AstyanaxReader.getInstance();
@@ -347,7 +345,6 @@ public class MetricsIntegrationTest extends IntegrationTestBase {
     //In this test, string metrics are not configured to be dropped so they are persisted.
     public void testStringMetricsIfSoConfiguredArePersistedAsExpected() throws Exception {
         Whitebox.setInternalState(AstyanaxWriter.getInstance(), "areStringMetricsDropped", false);
-        Whitebox.setInternalState(AstyanaxWriter.getInstance(), "annotationsReadCache", inmemorycache);
 
         AstyanaxWriter writer = AstyanaxWriter.getInstance();
         AstyanaxReader reader = AstyanaxReader.getInstance();
@@ -382,7 +379,6 @@ public class MetricsIntegrationTest extends IntegrationTestBase {
     //In this test, we attempt to persist the same value of String Metric every single time. Only the first one is persisted.
     public void testStringMetricsWithSameValueAreNotPersisted() throws Exception {
         Whitebox.setInternalState(AstyanaxWriter.getInstance(), "areStringMetricsDropped", false);
-        Whitebox.setInternalState(AstyanaxWriter.getInstance(), "annotationsReadCache", inmemorycache);
 
         AstyanaxWriter writer = AstyanaxWriter.getInstance();
         AstyanaxReader reader = AstyanaxReader.getInstance();
@@ -423,9 +419,6 @@ public class MetricsIntegrationTest extends IntegrationTestBase {
     //consecutive writes, it's always persisted.
     public void testStringMetricsWithDifferentValuesArePersisted() throws Exception {
         AstyanaxWriter writer = AstyanaxWriter.getInstance();
-        Whitebox.setInternalState(AstyanaxWriter.getInstance(), "annotationsReadCache", inmemorycache);
-
-
         AstyanaxReader reader = AstyanaxReader.getInstance();
 
         final long baseMillis = 1333635148000L; // some point during 5 April 2012.
@@ -467,7 +460,6 @@ public class MetricsIntegrationTest extends IntegrationTestBase {
     //Numeric value is always persisted.
     public void testNumericMetricsAreAlwaysPersisted() throws Exception {
         AstyanaxWriter writer = AstyanaxWriter.getInstance();
-        Whitebox.setInternalState(AstyanaxWriter.getInstance(), "annotationsReadCache", inmemorycache);
 
         AstyanaxReader reader = AstyanaxReader.getInstance();
         final long baseMillis = 1333635148000L; // some point during 5 April 2012.
@@ -500,7 +492,7 @@ public class MetricsIntegrationTest extends IntegrationTestBase {
     @Test
     //In this test, the same value is sent, and the metric is not persisted except for the first time.
     public void testBooleanMetricsWithSameValueAreNotPersisted() throws Exception {
-        Whitebox.setInternalState(AstyanaxWriter.getInstance(), "annotationsReadCache", inmemorycache);
+      //  Whitebox.setInternalState(AstyanaxWriter.getInstance(), "annotationsReadCache", inmemorycache);
         AstyanaxWriter writer = AstyanaxWriter.getInstance();
         AstyanaxReader reader = AstyanaxReader.getInstance();
         final long baseMillis = 1333635148000L; // some point during 5 April 2012.
@@ -537,7 +529,7 @@ public class MetricsIntegrationTest extends IntegrationTestBase {
     //In this test, we alternately persist true and false. All the boolean metrics are persisted.
     public void testBooleanMetricsWithDifferentValuesArePersisted() throws Exception {
         AstyanaxWriter writer = AstyanaxWriter.getInstance();
-        Whitebox.setInternalState(AstyanaxWriter.getInstance(), "annotationsReadCache", inmemorycache);
+     //   Whitebox.setInternalState(AstyanaxWriter.getInstance(), "annotationsReadCache", inmemorycache);
 
         AstyanaxReader reader = AstyanaxReader.getInstance();
         final long baseMillis = 1333635148000L; // some point during 5 April 2012.
