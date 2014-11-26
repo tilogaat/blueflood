@@ -70,7 +70,7 @@ public class AstyanaxReaderIntegrationTest extends IntegrationTestBase {
     public void testBatchedReads() throws Exception {
         // Write metrics and also persist their types.
         List<Locator> locatorList = new ArrayList<Locator>();
-        Metric metric = writeMetric("string_metric", "version 1.0.43342346");
+        Metric metric = writeMetric("string_metric", getRandomStringMetricValue());
         MetadataCache.getInstance().put(metric.getLocator(), MetricMetadata.TYPE.name().toLowerCase(), DataType.STRING.toString());
         locatorList.add(metric.getLocator());
 
