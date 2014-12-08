@@ -25,6 +25,7 @@ import com.netflix.astyanax.Keyspace;
 import com.netflix.astyanax.connectionpool.OperationResult;
 import com.netflix.astyanax.connectionpool.exceptions.ConnectionException;
 import com.netflix.astyanax.connectionpool.exceptions.NotFoundException;
+import com.netflix.astyanax.connectionpool.exceptions.TokenRangeOfflineException;
 import com.netflix.astyanax.model.*;
 import com.netflix.astyanax.query.RowQuery;
 import com.netflix.astyanax.serializers.AbstractSerializer;
@@ -245,7 +246,11 @@ public class AstyanaxReader extends AstyanaxIO {
             for (Row<Locator, Long> row : query.getResult()) {
                 columns.put(row.getKey(), row.getColumns());
             }
-        } catch (ConnectionException e) {
+        } catch (TokenRangeOfflineException e) {
+            // Pass. Giving this exception a pass since currently we are experiencing a Cassandra outage and we want empty
+            // data to be returned when this exception is caused
+        }
+        catch (ConnectionException e) {
             if (e instanceof NotFoundException) { // TODO: Not really sure what happens when one of the keys is not found.
                 Instrumentation.markNotFound(CF);
             } else {
@@ -253,7 +258,8 @@ public class AstyanaxReader extends AstyanaxIO {
                 else { Instrumentation.markReadError(e); }
             }
             log.warn((isBatch ? "Batch " : "") + " read query failed for column family " + CF.getName(), e);
-        } finally {
+        }
+        finally {
             ctx.stop();
         }
 
