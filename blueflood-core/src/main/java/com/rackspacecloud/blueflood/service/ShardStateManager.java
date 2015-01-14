@@ -22,6 +22,7 @@ import com.codahale.metrics.Meter;
 import com.google.common.base.Ticker;
 import com.rackspacecloud.blueflood.exceptions.GranularityException;
 import com.rackspacecloud.blueflood.rollup.Granularity;
+import com.rackspacecloud.blueflood.rollup.SlotKey;
 import com.rackspacecloud.blueflood.utils.Metrics;
 import com.rackspacecloud.blueflood.utils.Util;
 import org.slf4j.Logger;
@@ -43,8 +44,13 @@ public class ShardStateManager {
     // todo: CM_SPECIFIC verify changing metric class name doesn't break things.
     private static final Meter updateStampMeter = Metrics.meter(ShardStateManager.class, "Shard Slot Update Meter");
     private final Meter parentBeforeChild = Metrics.meter(RollupService.class, "Parent slot executed before child");
-    private static final Meter reRollupData = Metrics.meter(RollupService.class, "Re-rolling up a slot because of new data");
     private static final Counter catchPeriodDroppedSlots = Metrics.counter(RollupService.class, "Dropping a slot from rolling because its beyond catch-up period");
+    private static final Map<Granularity, Meter> granToReRollMeters = new HashMap<Granularity, Meter>();
+    static {
+        for (Granularity rollupGranularity : Granularity.rollupGranularities()) {
+            granToReRollMeters.put(rollupGranularity, Metrics.meter(RollupService.class, String.format("%s Re-rolling up because of delayed metrics", rollupGranularity.shortName())));
+        }
+    }
 
     protected ShardStateManager(Collection<Integer> shards, Ticker ticker) {
         this.shards = new HashSet<Integer>(shards);
@@ -78,8 +84,9 @@ public class ShardStateManager {
         return shardToGranularityStates.get(shard).granularityToSlots.get(granularity);
     }
 
-    protected UpdateStamp getUpdateStamp(int shard, Granularity gran, int slot) {
-        return this.getSlotStateManager(shard, gran).slotToUpdateStampMap.get(slot);
+    protected UpdateStamp getUpdateStamp(SlotKey slotKey) {
+        return this.getSlotStateManager(slotKey.getShard(), slotKey.getGranularity())
+                .slotToUpdateStampMap.get(slotKey.getSlot());
     }
 
     // Side effect: mark dirty slots as clean
@@ -108,22 +115,22 @@ public class ShardStateManager {
         getSlotStateManager(shard, slotState.getGranularity()).updateSlotOnRead(slotState);
     }
 
-    public void setAllCoarserSlotsDirtyForSlot(int shard, Granularity suppliedGranularity,
-                                               int suppliedSlot) {
+    public void setAllCoarserSlotsDirtyForSlot(SlotKey slotKey) {
         boolean done = false;
-        Granularity coarserGran = suppliedGranularity;
-        int coarserSlot = suppliedSlot;
+        Granularity coarserGran = slotKey.getGranularity();
+        int coarserSlot = slotKey.getSlot();
 
         while (!done) {
             try {
                 coarserGran = coarserGran.coarser();
                 coarserSlot = coarserGran.slotFromFinerSlot(coarserSlot);
-                ConcurrentMap<Integer, UpdateStamp> updateStampsBySlotMap = getSlotStateManager(shard, coarserGran).slotToUpdateStampMap;
+                ConcurrentMap<Integer, UpdateStamp> updateStampsBySlotMap = getSlotStateManager(slotKey.getShard(), coarserGran).slotToUpdateStampMap;
                 UpdateStamp coarseSlotStamp = updateStampsBySlotMap.get(coarserSlot);
 
                 if (coarseSlotStamp == null) {
-                    log.debug("No stamp for coarser slot: " + coarserGran.formatLocatorKey(coarserSlot, shard) +
-                        " ; supplied slot: " + suppliedGranularity.formatLocatorKey(suppliedSlot, shard));
+                    log.debug("No stamp for coarser slot: {}; supplied slot: {}",
+                            SlotKey.of(coarserGran, coarserSlot, slotKey.getShard()),
+                            slotKey);
                     updateStampsBySlotMap.putIfAbsent(coarserSlot,
                             new UpdateStamp(serverTimeMillisecondTicker.read(), UpdateStamp.State.Active, true));
                     continue;
@@ -132,10 +139,8 @@ public class ShardStateManager {
                 UpdateStamp.State coarseSlotState = coarseSlotStamp.getState();
                 if (coarseSlotState != UpdateStamp.State.Active) {
                     parentBeforeChild.mark();
-                    log.debug("Coarser slot not in active state when finer slot "
-                            + suppliedGranularity.formatLocatorKey(suppliedSlot, shard)
-                            + " just got rolled up. Marking coarser slot "
-                            + coarserGran.formatLocatorKey(coarserSlot, shard) + " dirty");
+                    log.debug("Coarser slot not in active state when finer slot {} just got rolled up. Marking coarser slot {} dirty.",
+                            slotKey, SlotKey.of(coarserGran, coarserSlot, slotKey.getShard()));
                     coarseSlotStamp.setState(UpdateStamp.State.Active);
                     coarseSlotStamp.setDirty(true);
                     coarseSlotStamp.setTimestamp(serverTimeMillisecondTicker.read());
@@ -194,6 +199,10 @@ public class ShardStateManager {
                 // 1) new update coming in. We can be in 3 states 1) Active 2) Rolled 3) Running. Apply the update in all cases except when we are already active and
                 //    the triggering timestamp we have is greater or the stamp in memory is yet to be persisted i.e still dirty
                 if (!(stamp.getState().equals(UpdateStamp.State.Active) && (stamp.getTimestamp() > timestamp || stamp.isDirty()))) {
+                    // If the shard state we have is ROLLED, and the snapped millis for the last rollup time and the current update is same, then its a re-roll
+                    if (stamp.getState().equals(UpdateStamp.State.Rolled) && granularity.snapMillis(stamp.getTimestamp()) == granularity.snapMillis(timestamp))
+                        granToReRollMeters.get(granularity).mark();
+
                     slotToUpdateStampMap.put(slot, new UpdateStamp(timestamp, state, false));
                 } else {
                     stamp.setDirty(true); // This is crucial for convergence, we need to superimpose a higher timestamp which can be done only if we set it to dirty
@@ -208,8 +217,10 @@ public class ShardStateManager {
             if (slotToUpdateStampMap.containsKey(slot)) {
                 UpdateStamp stamp = slotToUpdateStampMap.get(slot);
                 stamp.setTimestamp(millis);
-                if (stamp.getState().equals(UpdateStamp.State.Rolled)) {
-                    reRollupData.mark();
+                // Only if we are managing the shard and rolling it up, we should emit a metric here, otherwise, it will be emitted by the rollup context which is responsible for rolling up the shard
+                if (getManagedShards().contains(shard) && Configuration.getInstance().getBooleanProperty(CoreConfig.ROLLUP_MODE)) {
+                    if (stamp.getState().equals(UpdateStamp.State.Rolled) && granularity.snapMillis(stamp.getTimestamp()) == granularity.snapMillis(millis))
+                        granToReRollMeters.get(granularity).mark();
                 }
                 stamp.setState(UpdateStamp.State.Active);
                 stamp.setDirty(true);
@@ -278,13 +289,6 @@ public class ShardStateManager {
                     outputKeys.add(entry.getKey());
                 }
                 return outputKeys;
-        }
-
-        protected Collection<String> getChildAndSelfKeysForSlot(int slot) {
-            Collection<String> keys = new ArrayList<String>();
-            keys.addAll(this.granularity.getChildrenKeys(slot, shard));
-            keys.add(granularity.formatLocatorKey(slot, shard));
-            return keys;
         }
     }
 }
