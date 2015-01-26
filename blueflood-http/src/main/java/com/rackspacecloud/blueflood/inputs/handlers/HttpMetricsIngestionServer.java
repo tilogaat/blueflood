@@ -143,7 +143,7 @@ public class HttpMetricsIngestionServer {
                         .withName("Metric Batch Writing")
                         .withCorePoolSize(WRITE_THREADS)
                         .withMaxPoolSize(WRITE_THREADS)
-                        .withUnboundedQueue()
+                        .withSynchronousQueue()
                         .build(),
                 writer,
                 timeout,
@@ -172,7 +172,6 @@ public class HttpMetricsIngestionServer {
 
         this.defaultProcessorChain = AsyncChain
                 .withFunction(typeAndUnitProcessor)
-                .withFunction(rollupTypeCacher)
                 .withFunction(batchSplitter)
                 .withFunction(discoveryWriter)
                 .withFunction(batchWriter)
