@@ -50,10 +50,12 @@ public enum CoreConfig implements ConfigDefaults {
     META_CACHE_BATCHED_READS_THRESHOLD("100"), // how many rows to read at a time? (batch size)
     META_CACHE_BATCHED_READS_TIMER_MS("10"),  // how often to read? (batch timer) (read faster than writes)
     META_CACHE_BATCHED_READS_PIPELINE_DEPTH("10"), // how many outstanding batches? (1 thread per batch).
+    META_CACHE_BATCHED_READS_QUEUE_SIZE("1000"),
 
     META_CACHE_BATCHED_WRITES_THRESHOLD("100"),  // how many meta columns to write at a time? (batch size)
     META_CACHE_BATCHED_WRITES_TIMER_MS("20"),   // how often to write? (batch timer)
     META_CACHE_BATCHED_WRITES_PIPELINE_DEPTH("10"), // how many outstanding batches? (1 thread per batch).
+    META_CACHE_BATCHED_WRITES_QUEUE_SIZE("1000"),
 
     // Maximum timeout waiting on exhausted connection pools in milliseconds.
     // Maps directly to Astyanax's ConnectionPoolConfiguration.setMaxTimeoutWhenExhausted
@@ -143,7 +145,8 @@ public enum CoreConfig implements ConfigDefaults {
     STRING_METRICS_DROPPED("false"),
     TENANTIDS_TO_KEEP(""),
 
-    BYPASS_ROLLUP_TYPE_CACHE("false");
+    BYPASS_ROLLUP_TYPE_CACHE("false"),
+    USE_ES_FOR_UNITS("false");
 
     static {
         Configuration.getInstance().loadDefaults(CoreConfig.values());
