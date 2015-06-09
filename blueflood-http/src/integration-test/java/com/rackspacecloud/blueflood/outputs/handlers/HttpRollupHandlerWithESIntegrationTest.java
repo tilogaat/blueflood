@@ -64,7 +64,8 @@ public class HttpRollupHandlerWithESIntegrationTest extends IntegrationTestBase 
 
         esSetup = new EsSetup();
         esSetup.execute(EsSetup.deleteAll());
-        esSetup.execute(EsSetup.createIndex(ElasticIO.INDEX_NAME).withMapping("metrics", EsSetup.fromClassPath("metrics_mapping.json")));
+        esSetup.execute(EsSetup.createIndex(ElasticIO.INDEX_NAME_WRITE).withMapping("metrics", EsSetup.fromClassPath("metrics_mapping.json")));
+
         elasticIO = new ElasticIO(esSetup.client());
     }
 
