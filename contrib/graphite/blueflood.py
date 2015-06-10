@@ -241,7 +241,6 @@ class TenantBluefloodReader(object):
       node = TenantBluefloodLeafNode(self.metric, reader)
 
       time_info, dictionary = client.fetch_multi([node], start_time, end_time)
-      
       return (time_info, dictionary[self.metric])
 
 class BluefloodClient(object):
@@ -336,7 +335,7 @@ class BluefloodClient(object):
     payload = {
       'from': start_time * 1000,
       'to': end_time * 1000,
-      'points': 1000
+      'resolution': res
     }
     if self.enable_submetrics:
       payload['select'] = ','.join(self.submetric_aliases.values())

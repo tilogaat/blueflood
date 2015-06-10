@@ -19,14 +19,11 @@ package com.rackspacecloud.blueflood.io;
 import com.codahale.metrics.Histogram;
 import com.codahale.metrics.Meter;
 import com.google.common.annotations.VisibleForTesting;
-import com.rackspacecloud.blueflood.service.Configuration;
 import com.rackspacecloud.blueflood.service.ElasticClientManager;
-import com.rackspacecloud.blueflood.service.ElasticIOConfig;
 import com.rackspacecloud.blueflood.service.RemoteElasticSearchServer;
 import com.rackspacecloud.blueflood.types.IMetric;
 import com.rackspacecloud.blueflood.types.Locator;
 import com.rackspacecloud.blueflood.types.Metric;
-import com.rackspacecloud.blueflood.utils.GlobPattern;
 import com.rackspacecloud.blueflood.utils.Metrics;
 
 import com.codahale.metrics.Timer;
@@ -37,7 +34,6 @@ import org.elasticsearch.client.Client;
 import org.elasticsearch.common.xcontent.XContentBuilder;
 import org.elasticsearch.common.xcontent.XContentFactory;
 import org.elasticsearch.index.query.BoolQueryBuilder;
-import org.elasticsearch.index.query.QueryBuilder;
 import org.elasticsearch.search.SearchHit;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -46,11 +42,12 @@ import java.io.IOException;
 import java.util.*;
 
 import static com.rackspacecloud.blueflood.io.ElasticIO.ESFieldLabel.*;
-import static org.elasticsearch.index.query.QueryBuilders.*;
+import static org.elasticsearch.index.query.QueryBuilders.boolQuery;
+import static org.elasticsearch.index.query.QueryBuilders.termQuery;
+import static org.elasticsearch.index.query.QueryBuilders.wildcardQuery;
 
 public class ElasticIO implements DiscoveryIO {
-    public static final String INDEX_NAME_WRITE = Configuration.getInstance().getStringProperty(ElasticIOConfig.ELASTICSEARCH_INDEX_NAME_WRITE);
-    public static final String INDEX_NAME_READ = Configuration.getInstance().getStringProperty(ElasticIOConfig.ELASTICSEARCH_INDEX_NAME_READ);
+    public static final String INDEX_NAME = "metric_metadata";
     
     static enum ESFieldLabel {
         metric_name,
@@ -135,7 +132,7 @@ public class ElasticIO implements DiscoveryIO {
         if (md.getMetricName() == null) {
             throw new IllegalArgumentException("trying to insert metric discovery without a metricName");
         }
-        return client.prepareIndex(INDEX_NAME_WRITE, ES_TYPE)
+        return client.prepareIndex(INDEX_NAME, ES_TYPE)
                 .setId(md.getDocumentId())
                 .setSource(md.createSourceContent())
                 .setCreate(true)
@@ -150,27 +147,23 @@ public class ElasticIO implements DiscoveryIO {
         List<SearchResult> results = new ArrayList<SearchResult>();
         Timer.Context multiSearchCtx = searchTimer.time();
         queryBatchHistogram.update(queries.size());
-        BoolQueryBuilder bqb = boolQuery();
-        QueryBuilder qb;
+        BoolQueryBuilder qb = boolQuery();
 
         for (String query : queries) {
-            GlobPattern pattern = new GlobPattern(query);
-            if (!pattern.hasWildcard()) {
-                qb = termQuery(metric_name.name(), query);
-            } else {
-                qb = regexpQuery(metric_name.name(), pattern.compiled().toString());
-            }
-            bqb.should(boolQuery()
-                     .must(termQuery(tenantId.toString(), tenant))
-                     .must(qb)
-            );
+            qb.should(boolQuery()
+                    .must(termQuery(tenantId.toString(), tenant))
+                    .must(
+                            query.contains("*") ?
+                                    wildcardQuery(metric_name.name(), query) :
+                                    termQuery(metric_name.name(), query)
+                    ));
         }
 
-        SearchResponse response = client.prepareSearch(INDEX_NAME_READ)
+        SearchResponse response = client.prepareSearch(INDEX_NAME)
                 .setRouting(tenant)
                 .setSize(100000)
                 .setVersion(true)
-                .setQuery(bqb)
+                .setQuery(qb)
                 .execute()
                 .actionGet();
         multiSearchCtx.stop();
@@ -178,6 +171,7 @@ public class ElasticIO implements DiscoveryIO {
             SearchResult result = convertHitToMetricDiscoveryResult(hit);
             results.add(result);
         }
+
         return results;
     }
 
