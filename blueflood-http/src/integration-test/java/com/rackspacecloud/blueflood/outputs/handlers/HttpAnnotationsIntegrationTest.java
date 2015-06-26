@@ -136,6 +136,17 @@ public class HttpAnnotationsIntegrationTest {
         Assert.assertTrue(responseString.equals("[]"));
     }
 
+    @Test
+    public void testQueryHttpAnnotationsNoParams() throws Exception {
+        parameterMap = new HashMap<String, String>();
+        HttpGet get = new HttpGet(getAnnotationsQueryURI());
+        HttpResponse response = client.execute(get);
+        String responseString = EntityUtils.toString(response.getEntity());
+        Assert.assertEquals(400, response.getStatusLine().getStatusCode());
+        Assert.assertNotNull(responseString);
+        Assert.assertTrue(responseString.contains("Query should contain at least one query parameter"));
+    }
+
     private URI getAnnotationsQueryURI() throws URISyntaxException {
         URIBuilder builder = new URIBuilder().setScheme("http").setHost("127.0.0.1")
                 .setPort(queryPort).setPath("/v2.0/" + tenantId + "/events/getEvents");
