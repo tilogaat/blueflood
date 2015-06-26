@@ -169,7 +169,7 @@ public class HttpHandlerIntegrationTest {
     }
 
     @Test
-    public void testQueryInvalidJAnnotationsJSON() throws Exception {
+    public void testIngestingInvalidJAnnotationsJSON() throws Exception {
         URIBuilder builder = new URIBuilder().setScheme("http").setHost("127.0.0.1")
                 .setPort(httpPort).setPath("/v2.0/456854/events");
         HttpPost post = new HttpPost(builder.build());
@@ -190,7 +190,7 @@ public class HttpHandlerIntegrationTest {
     }
 
     @Test
-    public void testQueryInvalidAnnotationsData() throws Exception {
+    public void testIngestingInvalidAnnotationsData() throws Exception {
         URIBuilder builder = new URIBuilder().setScheme("http").setHost("127.0.0.1")
                 .setPort(httpPort).setPath("/v2.0/456854/events");
         HttpPost post = new HttpPost(builder.build());
