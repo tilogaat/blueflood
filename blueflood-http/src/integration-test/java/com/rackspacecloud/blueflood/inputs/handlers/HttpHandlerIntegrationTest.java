@@ -169,6 +169,47 @@ public class HttpHandlerIntegrationTest {
     }
 
     @Test
+    public void testQueryInvalidJAnnotationsJSON() throws Exception {
+        URIBuilder builder = new URIBuilder().setScheme("http").setHost("127.0.0.1")
+                .setPort(httpPort).setPath("/v2.0/456854/events");
+        HttpPost post = new HttpPost(builder.build());
+        String requestBody = //Invalid JSON with single inverted commas instead of double.
+                "{'when':346550008," +
+                        "'what':'Dummy Event'," +
+                        "'data':'Dummy Data'," +
+                        "'tags':'deployment'}";
+
+        HttpEntity entity = new StringEntity(requestBody,
+                ContentType.APPLICATION_JSON);
+        post.setEntity(entity);
+        post.setHeader(Event.FieldLabels.tenantId.name(), "456854");
+        HttpResponse response = client.execute(post);
+        String responseString = EntityUtils.toString(response.getEntity());
+        Assert.assertEquals(400, response.getStatusLine().getStatusCode());
+        Assert.assertTrue(responseString.contains("Invalid Data:"));
+    }
+
+    @Test
+    public void testQueryInvalidAnnotationsData() throws Exception {
+        URIBuilder builder = new URIBuilder().setScheme("http").setHost("127.0.0.1")
+                .setPort(httpPort).setPath("/v2.0/456854/events");
+        HttpPost post = new HttpPost(builder.build());
+        String requestBody = //Invalid Data.
+                "{\"how\":346550008," +
+                        "\"why\":\"Dummy Event\"," +
+                        "\"info\":\"Dummy Data\"," +
+                        "\"tickets\":\"deployment\"}";
+        HttpEntity entity = new StringEntity(requestBody,
+                ContentType.APPLICATION_JSON);
+        post.setEntity(entity);
+        post.setHeader(Event.FieldLabels.tenantId.name(), "456854");
+        HttpResponse response = client.execute(post);
+        String responseString = EntityUtils.toString(response.getEntity());
+        Assert.assertEquals(400, response.getStatusLine().getStatusCode());
+        Assert.assertTrue(responseString.contains("Invalid Data:"));
+    }
+
+    @Test
     public void testHttpAggregatedIngestionHappyCase() throws Exception {
         StringBuilder sb = new StringBuilder();
         BufferedReader reader = new BufferedReader(new InputStreamReader(new FileInputStream("src/test/resources/sample_bundle.json")));
