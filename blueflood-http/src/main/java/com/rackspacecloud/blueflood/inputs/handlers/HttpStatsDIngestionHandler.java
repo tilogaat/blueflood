@@ -23,11 +23,13 @@ import com.google.gson.Gson;
 import com.google.gson.JsonParseException;
 import com.netflix.astyanax.connectionpool.exceptions.ConnectionException;
 import com.rackspacecloud.blueflood.concurrent.FunctionWithThreadPool;
+import com.rackspacecloud.blueflood.http.DefaultHandler;
 import com.rackspacecloud.blueflood.http.HttpRequestHandler;
 import com.rackspacecloud.blueflood.inputs.handlers.wrappers.Bundle;
 import com.rackspacecloud.blueflood.io.AstyanaxWriter;
 import com.rackspacecloud.blueflood.io.CassandraModel;
 import com.rackspacecloud.blueflood.io.Constants;
+import com.rackspacecloud.blueflood.tracker.Tracker;
 import com.rackspacecloud.blueflood.types.IMetric;
 import com.rackspacecloud.blueflood.types.MetricsCollection;
 import com.rackspacecloud.blueflood.utils.Metrics;
@@ -62,9 +64,11 @@ public class HttpStatsDIngestionHandler implements HttpRequestHandler {
     // our own stuff.
     @Override
     public void handle(ChannelHandlerContext ctx, HttpRequest request) {
-        
+
+        Tracker.track(request);
+
         final Timer.Context timerContext = handlerTimer.time();
-        
+
         // this is all JSON.
         final String body = request.getContent().toString(Constants.DEFAULT_CHARSET);
         try {
@@ -76,25 +80,25 @@ public class HttpStatsDIngestionHandler implements HttpRequestHandler {
             List<Boolean> persisteds = futures.get(timeout.getValue(), timeout.getUnit());
             for (Boolean persisted : persisteds) {
                 if (!persisted) {
-                    HttpMetricsIngestionHandler.sendResponse(ctx, request, null, HttpResponseStatus.INTERNAL_SERVER_ERROR);
+                    DefaultHandler.sendResponse(ctx, request, null, HttpResponseStatus.INTERNAL_SERVER_ERROR);
                     return;
                 }
             }
-            HttpMetricsIngestionHandler.sendResponse(ctx, request, null, HttpResponseStatus.OK);
+            DefaultHandler.sendResponse(ctx, request, null, HttpResponseStatus.OK);
 
         } catch (JsonParseException ex) {
             log.debug(String.format("BAD JSON: %s", body));
             log.error(ex.getMessage(), ex);
-            HttpMetricsIngestionHandler.sendResponse(ctx, request, ex.getMessage(), HttpResponseStatus.BAD_REQUEST);
+            DefaultHandler.sendResponse(ctx, request, ex.getMessage(), HttpResponseStatus.BAD_REQUEST);
         } catch (ConnectionException ex) {
             log.error(ex.getMessage(), ex);
-            HttpMetricsIngestionHandler.sendResponse(ctx, request, "Internal error saving data", HttpResponseStatus.INTERNAL_SERVER_ERROR);
+            DefaultHandler.sendResponse(ctx, request, "Internal error saving data", HttpResponseStatus.INTERNAL_SERVER_ERROR);
         } catch (TimeoutException ex) {
-            HttpMetricsIngestionHandler.sendResponse(ctx, request, "Timed out persisting metrics", HttpResponseStatus.ACCEPTED);
+            DefaultHandler.sendResponse(ctx, request, "Timed out persisting metrics", HttpResponseStatus.ACCEPTED);
         } catch (Exception ex) {
             log.debug(String.format("BAD JSON: %s", body));
             log.error("Other exception while trying to parse content", ex);
-            HttpMetricsIngestionHandler.sendResponse(ctx, request, "Failed parsing content", HttpResponseStatus.INTERNAL_SERVER_ERROR);
+            DefaultHandler.sendResponse(ctx, request, "Failed parsing content", HttpResponseStatus.INTERNAL_SERVER_ERROR);
         } finally {
             requestCount.dec();
             timerContext.stop();
