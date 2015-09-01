@@ -222,6 +222,32 @@ public class AstyanaxReader extends AstyanaxIO {
         return columns == null ? new EmptyColumnList<Long>() : columns;
     }
 
+    private ColumnList<Long>getColumnsFromEnumCF(final Locator locator) {
+        final Map<Locator, ColumnList<Long>> columns = new HashMap<Locator, ColumnList<Long>>();
+
+        try {
+            // We don't paginate this call. So we should make sure the number of reads is tolerable.
+            // TODO: Think about paginating this call.
+            OperationResult<Rows<Locator, Long>> query = keyspace
+                    .prepareQuery(CassandraModel.CF_METRICS_ENUM)
+                    .getKeySlice(locator)
+                    .execute();
+
+            for (Row<Locator, Long> row : query.getResult()) {
+                columns.put(row.getKey(), row.getColumns());
+            }
+        } catch (ConnectionException e) {
+            if (e instanceof NotFoundException) { // TODO: Not really sure what happens when one of the keys is not found.
+               log.warn("Locator not found");
+            } else {
+               log.warn("ERRORRRR");
+            }
+        } finally {
+        }
+
+        return columns.get(locator);
+    }
+
     private Map<Locator, ColumnList<Long>> getColumnsFromDB(List<Locator> locators, ColumnFamily<Locator, Long> CF,
                                                             Range range) {
         if (range.getStart() > range.getStop()) {
@@ -280,6 +306,8 @@ public class AstyanaxReader extends AstyanaxIO {
                 serializer = NumericSerializer.gaugeRollupInstance;
             } else if (type.equals(BluefloodCounterRollup.class)) {
                 serializer = NumericSerializer.CounterRollupInstance;
+            } else if (type.equals(BluefloodEnumRollup.class)) {
+                serializer = NumericSerializer.enumRollupInstance;
             } else {
                 serializer = NumericSerializer.simpleNumberSerializer;
             }
@@ -295,7 +323,37 @@ public class AstyanaxReader extends AstyanaxIO {
             log.error("Problem deserializing data for " + locator + " (" + range + ") from " + cf.getName(), ex);
             throw new IOException(ex);
         }
+
+        if (points.getDataClass().equals(BluefloodEnumRollup.class)) {
+            ColumnList<Long> enumvalues = getColumnsFromEnumCF(locator);
+            Map<Long, String> hash2enumValues = getEnumValueFromHash(enumvalues);
+            Points<T> pointsEnum = new Points<T>();
+
+            Map<Long, Points.Point<T>> pointsMap = points.getPoints();
+
+            for (Long timestamp : points.getPoints().keySet()) {
+                BluefloodEnumRollup enumRollup = (BluefloodEnumRollup)pointsMap.get(timestamp).getData();
+                for (Long hash : enumRollup.getHashes().keySet()) {
+                    String enumValueString = hash2enumValues.get(hash);
+                    enumRollup.getRawValues().put(enumValueString, enumRollup.getHashes().get(hash));
+                    pointsEnum.add(new Points.Point<T>(timestamp,(T)enumRollup));
+                }
+            }
+
+            points = pointsEnum;
+        }
+
         return points;
+    }
+
+    private static Map<Long, String> getEnumValueFromHash(ColumnList<Long> enumValues) {
+        HashMap<Long,String> hash2enumValues = new HashMap<Long, String>();
+
+        for (Column<Long> col: enumValues) {
+            hash2enumValues.put(col.getName(), col.getStringValue());
+        }
+
+        return hash2enumValues;
     }
 
     public static String getUnitString(Locator locator) {
@@ -395,7 +453,6 @@ public class AstyanaxReader extends AstyanaxIO {
 
         return results;
     }
-
 
     public MetricData getHistogramsForRange(Locator locator, Range range, Granularity granularity) throws IOException {
         if (!granularity.isCoarser(Granularity.FULL)) {

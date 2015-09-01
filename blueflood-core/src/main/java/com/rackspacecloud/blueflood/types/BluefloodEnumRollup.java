@@ -1,13 +1,14 @@
 package com.rackspacecloud.blueflood.types;
 
+import java.io.IOException;
 import java.util.*;
 
 public class BluefloodEnumRollup implements Rollup {
-    private Set<String> rawEnumValues = new HashSet<String>();
+    private Map<String, Long> rawEnumValues = new HashMap<String, Long>();
     private Map<Long,Long> hashedEnum2Value = new HashMap<Long, Long>();
 
     public BluefloodEnumRollup withEnumValue(String valueName, Long value) {
-        this.rawEnumValues.add(valueName);
+        this.rawEnumValues.put(valueName, value);
         this.hashedEnum2Value.put((long) valueName.hashCode(), value);
         return this;
     }
@@ -35,7 +36,7 @@ public class BluefloodEnumRollup implements Rollup {
         return this.hashedEnum2Value;
     }
 
-    public Set<String> getRawValues() { return this.rawEnumValues; }
+    public Map<String, Long> getRawValues() { return this.rawEnumValues; }
 
     @Override
     public boolean equals(Object obj) {
@@ -44,6 +45,24 @@ public class BluefloodEnumRollup implements Rollup {
         }
         BluefloodEnumRollup other = (BluefloodEnumRollup)obj;
         return hashedEnum2Value.equals(other.hashedEnum2Value);
+    }
+
+    public static BluefloodEnumRollup buildRollupFromEnumRollups(Points<BluefloodEnumRollup> input) throws IOException {
+        BluefloodEnumRollup rollup = new BluefloodEnumRollup();
+        for (Points.Point<BluefloodEnumRollup> point : input.getPoints().values()) {
+            Map<Long,Long> mapFromPoint = point.getData().getHashes();
+            for (Long i : mapFromPoint.keySet()) {
+                if (rollup.getHashes().containsKey(i)) {
+                    Long value = rollup.getHashes().get(i);
+                    value += mapFromPoint.get(i);
+                    rollup.getHashes().put(i,value);
+                }
+                else {
+                    rollup.getHashes().put(i, mapFromPoint.get(i));
+                }
+            }
+        }
+        return rollup;
     }
 
 }
